@@ -1,5 +1,7 @@
 // App state
 let currentToken = null;
+let fileExplorer = null;
+
 
 // DOM elements
 const elements = {
@@ -56,6 +58,7 @@ async function handleLogin() {
             
             // Show app
             showApp();
+            await initializeFileExplorer();
             hideLoading();
             
             console.log('✅ Login successful!', userInfo);
@@ -71,6 +74,7 @@ async function handleLogin() {
                     elements.userName.textContent = userInfo.name;
                     elements.userAvatar.src = userInfo.picture;
                     showApp();
+                    await initializeFileExplorer();
                     console.log('✅ Auto-login successful!', userInfo);
                 } catch (error) {
                     console.log('❌ Stored token invalid, showing login');
@@ -90,6 +94,13 @@ async function handleLogin() {
         hideLoading();
     }
 }
+async function initializeFileExplorer() {
+    if (!fileExplorer) {
+        fileExplorer = new FileExplorer();
+    }
+    fileExplorer.initialize(currentToken);
+}
+
 
 function handleLogout() {
     localStorage.removeItem('driveToken');
@@ -110,4 +121,46 @@ elements.logoutBtn.addEventListener('click', handleLogout);
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 App initializing...');
     handleLogin();
+});
+// Add this function at the end of your app.js file
+async function testDriveConnection() {
+    if (!currentToken) {
+        console.log('❌ No token available');
+        return;
+    }
+    
+    try {
+        console.log('🔍 Testing Drive API connection...');
+        
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=10&fields=files(id,name,mimeType)`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Drive API working! Found files:', data.files);
+        return data.files;
+        
+    } catch (error) {
+        console.error('❌ Drive API test failed:', error);
+        return null;
+    }
+}
+
+// Add a test button click event (temporary)
+document.addEventListener('DOMContentLoaded', () => {
+    // Your existing code...
+    
+    // Add test button event after successful login
+    setTimeout(() => {
+        if (currentToken) {
+            console.log('🧪 Auto-testing Drive API...');
+            testDriveConnection();
+        }
+    }, 2000);
 });
