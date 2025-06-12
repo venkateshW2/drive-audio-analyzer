@@ -5,26 +5,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drive Audio Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-8">
-        <h1 class="text-4xl font-bold text-center text-blue-600 mb-8">
-            🎵 Drive Audio Analyzer
-        </h1>
-        
-        <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-2xl font-semibold mb-4">Day 1 Complete! ✅</h2>
-            <p class="text-gray-600 mb-4">
-                Environment setup successful. Ready to start building!
-            </p>
-            <button class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">
-                Coming Soon: Google Login
-            </button>
-        </div>
-        
-        <div class="mt-8 text-center text-sm text-gray-500">
-            <p>Day 1 of 30-day MVP journey</p>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Login View -->
+    <div id="loginView" class="min-h-screen flex items-center justify-center">
+        <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 mx-4">
+            <div class="text-center">
+                <!-- Logo -->
+                <div class="mb-6">
+                    <i class="fas fa-music text-5xl text-blue-600"></i>
+                </div>
+                
+                <!-- Title -->
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                    Drive Audio Analyzer
+                </h1>
+                <p class="text-gray-600 mb-8">
+                    Analyze and organize your audio files from Google Drive
+                </p>
+                
+                <!-- Login Button -->
+                <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center space-x-2">
+                    <i class="fab fa-google"></i>
+                    <span>Sign in with Google</span>
+                </button>
+                
+                <!-- Features -->
+                <div class="mt-8 text-left">
+                    <h3 class="font-semibold text-gray-800 mb-3">What you can do:</h3>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li class="flex items-center">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Browse audio files in your Drive
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Analyze tempo, key, and audio features
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Tag and organize your music library
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- App View (hidden initially) -->
+    <div id="appView" class="hidden min-h-screen">
+        <header class="bg-white shadow-sm px-6 py-4">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-semibold">Drive Audio Analyzer</h1>
+                <div class="flex items-center space-x-4">
+                    <div id="userInfo" class="flex items-center space-x-2">
+                        <img id="userAvatar" class="w-8 h-8 rounded-full" alt="User">
+                        <span id="userName" class="text-sm text-gray-700"></span>
+                    </div>
+                    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <main class="p-6">
+            <div class="max-w-4xl mx-auto">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-bold mb-4">🎉 Login Successful!</h2>
+                    <p class="text-gray-600 mb-4">Welcome to your audio analyzer dashboard.</p>
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-blue-800"><strong>Day 2 Complete!</strong> Tomorrow we'll add the file explorer.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span>Signing you in...</span>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
