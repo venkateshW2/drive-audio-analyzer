@@ -1,4 +1,4 @@
-// Clean app.js - NO modules, NO exports
+// App state
 let currentToken = null;
 let fileExplorer = null;
 let audioPlayer = null;
@@ -15,73 +15,83 @@ const elements = {
     loadingOverlay: document.getElementById('loadingOverlay')
 };
 
+// Check if essential elements exist
+function checkEssentialElements() {
+    const missing = [];
+    
+    if (!elements.loginView) missing.push('loginView');
+    if (!elements.appView) missing.push('appView');
+    if (!elements.loginBtn) missing.push('loginBtn');
+    
+    if (missing.length > 0) {
+        console.error('❌ Missing essential DOM elements:', missing);
+        return false;
+    }
+    
+    console.log('✅ All essential DOM elements found');
+    return true;
+}
+
 // Utility functions
 function showLoading(text = 'Loading...') {
-    const loadingText = document.getElementById('loadingText');
-    if (loadingText) loadingText.textContent = text;
-    if (elements.loadingOverlay) elements.loadingOverlay.classList.remove('hidden');
+    if (elements.loadingOverlay) {
+        document.getElementById('loadingText').textContent = text;
+        elements.loadingOverlay.classList.remove('hidden');
+    }
 }
 
 function hideLoading() {
-    if (elements.loadingOverlay) elements.loadingOverlay.classList.add('hidden');
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.classList.add('hidden');
+    }
 }
 
 function showApp() {
-    if (elements.loginView) elements.loginView.classList.add('hidden');
-    if (elements.appView) elements.appView.classList.remove('hidden');
+    if (elements.loginView && elements.appView) {
+        elements.loginView.classList.add('hidden');
+        elements.appView.classList.remove('hidden');
+    }
 }
 
 function showLogin() {
-    if (elements.loginView) elements.loginView.classList.remove('hidden');
-    if (elements.appView) elements.appView.classList.add('hidden');
+    if (elements.loginView && elements.appView) {
+        elements.loginView.classList.remove('hidden');
+        elements.appView.classList.add('hidden');
+    }
 }
 
 async function initializeFileExplorer() {
-    try {
-        if (!fileExplorer && window.FileExplorer) {
-            fileExplorer = new FileExplorer();
-            if (currentToken) {
-                fileExplorer.initialize(currentToken);
-            }
-            console.log('📁 File explorer initialized');
+    if (!fileExplorer && typeof FileExplorer !== 'undefined') {
+        fileExplorer = new FileExplorer();
+        window.fileExplorer = fileExplorer;
+        console.log('📁 File explorer initialized');
+        
+        if (currentToken) {
+            fileExplorer.initialize(currentToken);
         }
-    } catch (error) {
-        console.error('❌ Error initializing file explorer:', error);
     }
 }
 
 async function initializeAudioPlayer() {
-    try {
-        if (!audioPlayer && window.AudioPlayer) {
-            audioPlayer = new AudioPlayer();
-            window.audioPlayer = audioPlayer;
-            console.log('🎵 Audio player initialized');
-        }
-    } catch (error) {
-        console.error('❌ Error initializing audio player:', error);
+    if (!audioPlayer && typeof AudioPlayer !== 'undefined') {
+        audioPlayer = new AudioPlayer();
+        window.audioPlayer = audioPlayer;
+        console.log('🎵 Audio player initialized');
     }
 }
 
 // Auth handling
 async function handleLogin() {
     try {
-        console.log('🔐 Starting login process...');
-        
-        if (!window.authFunctions) {
-            throw new Error('Auth functions not loaded');
-        }
-        
-        const token = window.authFunctions.getAccessTokenFromUrl();
+        const token = window.authFunctions?.getAccessTokenFromUrl?.();
         
         if (token) {
-            console.log('🔑 Token found in URL');
-            showLoading('Logging in...');
+            showLoading();
             
             localStorage.setItem('driveToken', token);
             currentToken = token;
             
             const userInfo = await window.authFunctions.getUserInfo(token);
-            console.log('👤 User info received:', userInfo.name);
             
             if (elements.userName) elements.userName.textContent = userInfo.name;
             if (elements.userAvatar) elements.userAvatar.src = userInfo.picture;
@@ -95,19 +105,15 @@ async function handleLogin() {
             await initializeAudioPlayer();
             hideLoading();
             
-            console.log('✅ Login successful!');
+            console.log('✅ Login successful!', userInfo);
         } else {
-            console.log('🔍 No token in URL, checking localStorage...');
             const storedToken = localStorage.getItem('driveToken');
-            
             if (storedToken) {
-                console.log('💾 Found stored token');
-                showLoading('Restoring session...');
+                showLoading();
                 currentToken = storedToken;
                 
                 try {
                     const userInfo = await window.authFunctions.getUserInfo(storedToken);
-                    
                     if (elements.userName) elements.userName.textContent = userInfo.name;
                     if (elements.userAvatar) elements.userAvatar.src = userInfo.picture;
                     if (elements.userInfo) elements.userInfo.classList.remove('hidden');
@@ -116,22 +122,23 @@ async function handleLogin() {
                     showApp();
                     await initializeFileExplorer();
                     await initializeAudioPlayer();
-                    console.log('✅ Auto-login successful!');
+                    console.log('✅ Auto-login successful!', userInfo);
                 } catch (error) {
-                    console.log('❌ Stored token invalid:', error);
+                    console.log('❌ Stored token invalid, showing login');
                     localStorage.removeItem('driveToken');
                     showLogin();
                 }
                 hideLoading();
             } else {
-                console.log('📋 No stored token, showing login');
                 showLogin();
             }
         }
     } catch (error) {
         console.error('❌ Login error:', error);
-        hideLoading();
+        alert('Login failed. Please try again.');
+        localStorage.removeItem('driveToken');
         showLogin();
+        hideLoading();
     }
 }
 
@@ -139,36 +146,46 @@ function handleLogout() {
     localStorage.removeItem('driveToken');
     currentToken = null;
     showLogin();
+    
     if (elements.userInfo) elements.userInfo.classList.add('hidden');
     if (elements.logoutBtn) elements.logoutBtn.classList.add('hidden');
-    console.log('👋 Logged out');
 }
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🌐 DOM loaded, initializing app...');
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🌐 DOM fully loaded');
     
-    // Setup login button
+    if (!checkEssentialElements()) {
+        console.error('❌ Cannot initialize app - missing DOM elements');
+        return;
+    }
+    
+    // Setup event listeners only if elements exist
     if (elements.loginBtn) {
-        elements.loginBtn.addEventListener('click', function() {
-            console.log('🔘 Login button clicked');
-            if (window.authFunctions && window.authFunctions.redirectToGoogleAuth) {
-                showLoading('Redirecting to Google...');
+        elements.loginBtn.addEventListener('click', () => {
+            if (window.authFunctions?.redirectToGoogleAuth) {
+                showLoading();
                 window.authFunctions.redirectToGoogleAuth();
-            } else {
-                console.error('❌ Auth functions not available');
-                alert('Authentication system not loaded. Please refresh the page.');
             }
         });
     }
     
-    // Setup logout button
     if (elements.logoutBtn) {
         elements.logoutBtn.addEventListener('click', handleLogout);
     }
     
-    // Check for existing login
-    setTimeout(handleLogin, 100);
+    // Check for existing auth
+    if (localStorage.getItem('driveToken')) {
+        console.log('🔐 Token found → emitting auth:success');
+        handleLogin();
+    } else {
+        showLogin();
+    }
 });
 
-console.log('📱 App.js loaded successfully');
+// Handle auth callback
+window.addEventListener('load', () => {
+    if (window.location.hash.includes('access_token')) {
+        handleLogin();
+    }
+});

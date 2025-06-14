@@ -1,0 +1,579 @@
+// Region Management System
+// RegionManager - FIXED VERSION
+class RegionManager {
+    constructor(audioPlayer) {
+        this.audioPlayer = audioPlayer;
+        this.storage = new RegionStorage();
+        this.controls = null; // Add this line
+
+        this.currentFile = null;
+        this.regions = [];
+        this.selectedRegion = null;
+        this.regionCounter = 0;
+        
+        // Initialize with a delay to ensure DOM is ready
+        setTimeout(() => {
+            this.initializeElements();
+            this.setupEventListeners();
+            this.renderer = new RegionRenderer(this);
+            this.editor = new RegionEditor(this);
+            if (typeof RegionControls !== 'undefined') {
+            this.controls = new RegionControls(this);
+          }
+        
+            console.log('📍 RegionManager initialized successfully');
+        }, 100);
+    }
+    
+    initializeElements() {
+        // Find elements with error checking
+        this.elements = {};
+        
+        const elementIds = [
+            'regionList', 'regionCount', 'regionInfo', 'selectedRegionName',
+            'regionStart', 'regionEnd', 'regionDuration', 'regionName', 
+            'regionColor', 'regionNotes', 'addRegionBtn', 'saveRegionsBtn',
+            'playRegionBtn', 'analyzeRegionBtn', 'deleteRegionBtn', 
+            'regionOverlay', 'waveform'
+        ];
+        
+        elementIds.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                this.elements[id] = element;
+            } else {
+                console.warn(`⚠️ Element not found: ${id}`);
+            }
+        });
+        
+        // Check if we have essential elements
+        const essentialElements = ['regionList', 'regionCount', 'addRegionBtn'];
+        const missingElements = essentialElements.filter(id => !this.elements[id]);
+        
+        if (missingElements.length > 0) {
+            console.error('❌ Missing essential elements:', missingElements);
+            return false;
+        }
+        
+        console.log('✅ All region elements found successfully');
+        return true;
+    }
+    
+    setupEventListeners() {
+        // Add region button
+        if (this.elements.addRegionBtn) {
+            this.elements.addRegionBtn.addEventListener('click', () => {
+                this.addRegionAtCurrentTime();
+            });
+        }
+        
+        // Save regions button
+        if (this.elements.saveRegionsBtn) {
+            this.elements.saveRegionsBtn.addEventListener('click', () => {
+                this.saveRegions();
+            });
+        }
+        
+        // Region actions (only if elements exist)
+        if (this.elements.playRegionBtn) {
+            this.elements.playRegionBtn.addEventListener('click', () => {
+                this.playSelectedRegion();
+            });
+        }
+        
+        if (this.elements.analyzeRegionBtn) {
+            this.elements.analyzeRegionBtn.addEventListener('click', () => {
+                this.analyzeSelectedRegion();
+            });
+        }
+        
+        if (this.elements.deleteRegionBtn) {
+            this.elements.deleteRegionBtn.addEventListener('click', () => {
+                this.deleteSelectedRegion();
+            });
+        }
+        
+        // Region property changes
+        if (this.elements.regionName) {
+            this.elements.regionName.addEventListener('input', (e) => {
+                this.updateSelectedRegionProperty('name', e.target.value);
+            });
+        }
+        
+        if (this.elements.regionColor) {
+            this.elements.regionColor.addEventListener('change', (e) => {
+                this.updateSelectedRegionProperty('color', e.target.value);
+                if (this.renderer) this.renderer.updateRegionVisuals();
+            });
+        }
+        
+        if (this.elements.regionNotes) {
+            this.elements.regionNotes.addEventListener('input', (e) => {
+                this.updateSelectedRegionProperty('notes', e.target.value);
+            });
+        }
+    }
+    
+    // Rest of your methods stay the same...
+    // (keeping existing methods but adding safety checks)
+    
+    // Load regions for a file
+    async loadRegionsForFile(file) {
+        this.currentFile = file;
+        console.log('📍 Loading regions for file:', file.name);
+        
+        try {
+            // Try to load from cache first
+            const cachedRegions = this.storage.loadFromCache(file.id);
+            if (cachedRegions && cachedRegions.regions) {
+                this.regions = cachedRegions.regions;
+                console.log('📍 Loaded', this.regions.length, 'regions from cache');
+            } else {
+                this.regions = [];
+                console.log('📍 No cached regions found, starting fresh');
+            }
+            
+            this.renderer.renderRegionList();
+            this.enableControls();
+            
+            // TODO: Later we'll add Google Drive sync here
+            
+        } catch (error) {
+            console.error('❌ Error loading regions:', error);
+            this.regions = [];
+            this.renderer.renderRegionList();
+        }
+    }
+    
+    // Create a new region
+    createRegion(start, end, name = null, color = '#3b82f6') {
+        this.regionCounter++;
+        
+        const region = {
+            id: `region_${Date.now()}_${this.regionCounter}`,
+            name: name || `Region ${this.regionCounter}`,
+            start: Math.max(0, start),
+            end: Math.min(end, this.audioPlayer.wavesurfer?.getDuration() || end),
+            color: color,
+            notes: '',
+            created: new Date().toISOString(),
+            modified: new Date().toISOString(),
+            analysisResults: null
+        };
+        
+        // Ensure end > start
+        if (region.end <= region.start) {
+            region.end = region.start + 1;
+        }
+        
+        this.regions.push(region);
+        this.regions.sort((a, b) => a.start - b.start); // Keep sorted by start time
+        
+        console.log('📍 Created region:', region);
+        
+        this.renderer.renderRegionList();
+        this.selectRegion(region.id);
+        this.autoSave();
+        
+        return region;
+    }
+    
+    // Add region at current playback time
+    addRegionAtCurrentTime() {
+    try {
+        let currentTime = 0;
+        let duration = 60; // Default duration
+        
+        if (this.audioPlayer.wavesurfer) {
+            currentTime = this.audioPlayer.wavesurfer.getCurrentTime();
+            duration = this.audioPlayer.wavesurfer.getDuration();
+        }
+        
+        const regionDuration = Math.min(5, duration - currentTime);
+        const newRegion = this.createRegion(currentTime, currentTime + regionDuration);
+        
+        console.log('📍 Added region at time:', currentTime);
+        return newRegion;
+        
+    } catch (error) {
+        console.error('❌ Error adding region:', error);
+        
+        // Fallback: create a basic region
+        const newRegion = this.createRegion(0, 5, 'Default Region');
+        return newRegion;
+    }
+}
+    
+    // Select a region
+    selectRegion(regionId) {
+        this.selectedRegion = this.regions.find(r => r.id === regionId);
+        
+        if (this.selectedRegion) {
+            this.elements.regionInfo.classList.remove('hidden');
+            this.updateRegionInfoPanel();
+            this.renderer.highlightRegion(regionId);
+        } else {
+            this.elements.regionInfo.classList.add('hidden');
+        }
+    }
+    
+    // Update region info panel
+    updateRegionInfoPanel() {
+        if (!this.selectedRegion) return;
+        
+        this.elements.selectedRegionName.textContent = this.selectedRegion.name;
+        this.elements.regionStart.value = this.formatTime(this.selectedRegion.start);
+        this.elements.regionEnd.value = this.formatTime(this.selectedRegion.end);
+        this.elements.regionDuration.value = this.formatTime(this.selectedRegion.end - this.selectedRegion.start);
+        this.elements.regionName.value = this.selectedRegion.name;
+        this.elements.regionColor.value = this.selectedRegion.color;
+        this.elements.regionNotes.value = this.selectedRegion.notes || '';
+    }
+    
+    // Update region property
+    updateSelectedRegionProperty(property, value) {
+        if (!this.selectedRegion) return;
+        
+        this.selectedRegion[property] = value;
+        this.selectedRegion.modified = new Date().toISOString();
+        
+        if (property === 'name') {
+            this.elements.selectedRegionName.textContent = value;
+        }
+        
+        this.renderer.renderRegionList();
+        this.autoSave();
+    }
+    
+    // Delete selected region
+    deleteSelectedRegion() {
+        if (!this.selectedRegion) return;
+        
+        if (confirm(`Delete region "${this.selectedRegion.name}"?`)) {
+            this.regions = this.regions.filter(r => r.id !== this.selectedRegion.id);
+            this.selectedRegion = null;
+            this.elements.regionInfo.classList.add('hidden');
+            this.renderer.renderRegionList();
+            this.autoSave();
+        }
+    }
+    
+    // Play selected region
+    playSelectedRegion() {
+        if (!this.selectedRegion || !this.audioPlayer.wavesurfer) return;
+        
+        const { start, end } = this.selectedRegion;
+        this.audioPlayer.wavesurfer.play(start, end);
+    }
+    
+    // Analyze selected region
+    analyzeSelectedRegion() {
+        if (!this.selectedRegion) return;
+        
+        const regionData = {
+            file: this.currentFile,
+            region: this.selectedRegion
+        };
+        
+        console.log('🔬 Analyzing region:', regionData);
+        
+        // TODO: Send to analysis API
+        alert(`Analyzing Region: ${this.selectedRegion.name}\n\nStart: ${this.formatTime(this.selectedRegion.start)}\nEnd: ${this.formatTime(this.selectedRegion.end)}\nDuration: ${this.formatTime(this.selectedRegion.end - this.selectedRegion.start)}\n\nTODO: Connect to analysis API`);
+    }
+    
+    // Save regions
+    async saveRegions() {
+        if (!this.currentFile) return;
+        
+        try {
+            await this.storage.saveToCache(this.currentFile.id, {
+                metadata: {
+                    fileId: this.currentFile.id,
+                    fileName: this.currentFile.name,
+                    duration: this.audioPlayer.wavesurfer?.getDuration() || 0,
+                    lastModified: new Date().toISOString()
+                },
+                regions: this.regions
+            });
+            
+            // Show success feedback
+            const btn = this.elements.saveRegionsBtn;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved';
+            btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            btn.classList.add('bg-green-600');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }, 2000);
+            
+            console.log('💾 Regions saved successfully');
+            
+        } catch (error) {
+            console.error('❌ Error saving regions:', error);
+            alert('Failed to save regions');
+        }
+    }
+    
+    // Auto-save (debounced)
+    autoSave() {
+        clearTimeout(this.autoSaveTimer);
+        this.autoSaveTimer = setTimeout(() => {
+            if (this.currentFile) {
+                this.storage.saveToCache(this.currentFile.id, {
+                    metadata: {
+                        fileId: this.currentFile.id,
+                        fileName: this.currentFile.name,
+                        duration: this.audioPlayer.wavesurfer?.getDuration() || 0,
+                        lastModified: new Date().toISOString()
+                    },
+                    regions: this.regions
+                });
+                console.log('💾 Auto-saved regions');
+            }
+        }, 2000);
+    }
+    
+    // Enable controls
+    enableControls() {
+    if (this.elements.addRegionBtn) this.elements.addRegionBtn.disabled = false;
+    if (this.elements.saveRegionsBtn) this.elements.saveRegionsBtn.disabled = false;
+    
+    // Enable region controls
+    if (this.controls) {
+        this.controls.enableControls();
+    }
+    }
+    
+    // Disable controls
+    disableControls() {
+         if (this.elements.addRegionBtn) this.elements.addRegionBtn.disabled = true;
+         if (this.elements.saveRegionsBtn) this.elements.saveRegionsBtn.disabled = true;
+            // Disable region controls
+            if (this.controls) {
+                this.controls.disableControls();
+            }
+    }
+    
+    // Clear all regions
+    clearRegions() {
+        this.regions = [];
+        this.selectedRegion = null;
+        this.elements.regionInfo.classList.add('hidden');
+        this.renderer.renderRegionList();
+    }
+    
+    // Format time
+    formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+}
+
+// Region Storage Class
+class RegionStorage {
+    constructor() {
+        this.cachePrefix = 'drive_audio_analyzer_regions_';
+    }
+    
+    // Save to local storage cache
+    saveToCache(fileId, regionData) {
+        try {
+            const key = this.cachePrefix + fileId;
+            localStorage.setItem(key, JSON.stringify(regionData));
+            console.log('💾 Regions cached for file:', fileId);
+        } catch (error) {
+            console.error('❌ Error caching regions:', error);
+        }
+    }
+    
+    // Load from local storage cache
+    loadFromCache(fileId) {
+        try {
+            const key = this.cachePrefix + fileId;
+            const data = localStorage.getItem(key);
+            if (data) {
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error('❌ Error loading cached regions:', error);
+        }
+        return null;
+    }
+    
+    // Clear cache for file
+    clearCache(fileId) {
+        const key = this.cachePrefix + fileId;
+        localStorage.removeItem(key);
+    }
+    
+    // TODO: Google Drive save/load methods will be added later
+}
+
+// Region Renderer Class
+// RegionRenderer Class - FIXED VERSION
+class RegionRenderer {
+    constructor(regionManager) {
+        this.regionManager = regionManager;
+        this.elements = regionManager.elements;
+    }
+    
+    // Render region list with safety checks
+// Update RegionRenderer class - renderRegionList method
+renderRegionList() {
+    if (!this.elements.regionList || !this.elements.regionCount) {
+        console.warn('⚠️ Region list elements not available');
+        return;
+    }
+    
+    const regions = this.regionManager.regions;
+    
+    // Update region count
+    this.elements.regionCount.textContent = regions.length;
+    
+    if (regions.length === 0) {
+        this.elements.regionList.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-cut text-3xl mb-2"></i>
+                <p class="text-sm font-medium">No regions created yet</p>
+                <p class="text-xs text-gray-400">Use IN/OUT points above to create regions</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Grid layout - no scrolling, compact cards
+    this.elements.regionList.innerHTML = `
+        <div class="grid grid-cols-1 gap-2">
+            ${regions.map((region, index) => `
+                <div class="region-item bg-white border rounded p-2 cursor-pointer hover:shadow-sm transition-shadow ${this.regionManager.selectedRegion?.id === region.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" 
+                     data-region-id="${region.id}">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2 flex-1 min-w-0">
+                            <div class="w-3 h-3 rounded" style="background-color: ${region.color}"></div>
+                            <span class="font-medium text-sm truncate">${this.escapeHtml(region.name)}</span>
+                            <span class="text-xs text-gray-500">
+                                ${this.regionManager.formatTime(region.start)} → ${this.regionManager.formatTime(region.end)}
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <button class="play-region-btn text-blue-600 hover:text-blue-800 text-xs p-1" title="Play">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="edit-region-btn text-gray-600 hover:text-gray-800 text-xs p-1" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="analyze-region-btn text-orange-600 hover:text-orange-800 text-xs p-1" title="Analyze">
+                                <i class="fas fa-chart-line"></i>
+                            </button>
+                            <button class="delete-region-btn text-red-600 hover:text-red-800 text-xs p-1" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    // Add click handlers
+    this.setupRegionListHandlers();
+}
+    
+    // Escape HTML to prevent XSS
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Setup region list click handlers
+    setupRegionListHandlers() {
+        document.querySelectorAll('.region-item').forEach(item => {
+            const regionId = item.dataset.regionId;
+            
+            item.addEventListener('click', (e) => {
+                if (!e.target.closest('button')) {
+                    this.regionManager.selectRegion(regionId);
+                }
+            });
+            
+            // Play button
+            const playBtn = item.querySelector('.play-region-btn');
+            if (playBtn) {
+                playBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const region = this.regionManager.regions.find(r => r.id === regionId);
+                    if (region && this.regionManager.audioPlayer.wavesurfer) {
+                        this.regionManager.audioPlayer.wavesurfer.play(region.start, region.end);
+                    }
+                });
+            }
+            
+            // Analyze button
+            const analyzeBtn = item.querySelector('.analyze-region-btn');
+            if (analyzeBtn) {
+                analyzeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.regionManager.selectRegion(regionId);
+                    this.regionManager.analyzeSelectedRegion();
+                });
+            }
+            
+            // Delete button
+            const deleteBtn = item.querySelector('.delete-region-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const region = this.regionManager.regions.find(r => r.id === regionId);
+                    if (region && confirm(`Delete region "${region.name}"?`)) {
+                        this.regionManager.regions = this.regionManager.regions.filter(r => r.id !== regionId);
+                        if (this.regionManager.selectedRegion?.id === regionId) {
+                            this.regionManager.selectedRegion = null;
+                            if (this.regionManager.elements.regionInfo) {
+                                this.regionManager.elements.regionInfo.classList.add('hidden');
+                            }
+                        }
+                        this.renderRegionList();
+                        this.regionManager.autoSave();
+                    }
+                });
+            }
+        });
+    }
+    
+    // Highlight selected region
+    highlightRegion(regionId) {
+        document.querySelectorAll('.region-item').forEach(item => {
+            if (item.dataset.regionId === regionId) {
+                item.classList.add('border-blue-500', 'bg-blue-50');
+                item.classList.remove('border-gray-200');
+            } else {
+                item.classList.remove('border-blue-500', 'bg-blue-50');
+                item.classList.add('border-gray-200');
+            }
+        });
+    }
+    
+    // Update region visuals
+    updateRegionVisuals() {
+        this.renderRegionList();
+    }
+}
+// Region Editor Class (for future drag & drop functionality)
+class RegionEditor {
+    constructor(regionManager) {
+        this.regionManager = regionManager;
+        // TODO: Add drag & drop waveform editing
+    }
+}
+
+// Export classes
+window.RegionManager = RegionManager;
+window.RegionStorage = RegionStorage;
+window.RegionRenderer = RegionRenderer;
+window.RegionEditor = RegionEditor;
+console.log('📍 RegionManager classes loaded');

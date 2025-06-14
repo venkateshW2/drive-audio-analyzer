@@ -436,21 +436,33 @@ class FileExplorer {
     }
     
     // Handle file name click (separate from checkbox)
-    handleFileNameClick(row) {
-        const fileId = row.dataset.fileId;
-        const fileName = row.querySelector('.file-name-clickable').textContent;
-        
-        console.log('🎵 Opening file:', fileName);
-        
-        // Add visual feedback
-        row.classList.add('bg-yellow-50');
-        setTimeout(() => {
-            row.classList.remove('bg-yellow-50');
-        }, 200);
-        
-        // TODO: Open audio player/waveform editor
-        alert(`File clicked: ${fileName}\n\nTODO: Open audio player/waveform editor`);
+    // Update this method in your FileExplorer class
+handleFileNameClick(row) {
+    const fileId = row.dataset.fileId;
+    const fileName = row.querySelector('.file-name-clickable').textContent;
+    
+    console.log('🎵 Opening audio file:', fileName);
+    
+    // Find the file object
+    const file = this.allFiles.find(f => f.id === fileId);
+    if (!file) {
+        console.error('File not found:', fileId);
+        return;
     }
+    
+    // Add visual feedback
+    row.classList.add('bg-yellow-50');
+    setTimeout(() => {
+        row.classList.remove('bg-yellow-50');
+    }, 200);
+    
+    // Load in audio player
+    if (window.audioPlayer) {
+        window.audioPlayer.loadAudioFile(file, this.driveAPI.token);
+    } else {
+        console.error('Audio player not initialized');
+    }
+}
     
     // Handle file selection (checkbox)
     handleFileSelection(row, isSelected) {
